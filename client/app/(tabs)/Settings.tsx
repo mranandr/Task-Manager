@@ -1,189 +1,243 @@
-import {  Modal, ScrollView, Switch, TouchableOpacity, View , TextInput} from "react-native";
-import { Theme } from "./TaskTab";
-import { Text } from "react-native-gesture-handler";
-import { styles } from "./styles";
+import React from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+} from "react-native";
+import { Picker } from "@react-native-picker/picker";
+import { styles } from "./styles"; 
+import { darkTheme, lightTheme, Theme } from "./TaskTab";
 
-export interface AppSettings {
+interface SettingsProps {
   notificationsEnabled: boolean;
-  notificationTime: string;
-  notificationPanel: 'Banner' | 'Alert' | 'Modal';
+  notificationTime: string; 
+  amPm: "AM" | "PM";
+  notificationPanel: "Banner" | "Alert" | "Modal";
   darkMode: boolean;
   showSunday: boolean;
   soundEnabled: boolean;
-  notificationTone: 'Default' | 'Chime' | 'Bell';
+  notificationTone: "Default" | "Chime" | "Bell";
+}
+
+interface SettingsComponentProps {
+  theme: Theme; 
+  settings: SettingsProps;
+  onSettingsChange: (newSettings: SettingsProps) => void;
+}
+
+// 👇 Props for Section (reusable layout container)
+interface SectionProps {
+  title: string;
+  children: React.ReactNode;
 }
 
 
-interface SettingsProps {
-  visible: boolean;
-  onClose: () => void;
-  theme: Theme;
-  settings: AppSettings;
-  onSettingsChange: (newSettings: AppSettings) => void;
-}
-
-export const Settings: React.FC<SettingsProps> = ({
-  visible,
-  onClose,
-  theme,
+export const Settings: React.FC<SettingsComponentProps> = ({
   settings,
   onSettingsChange,
-}) => (
-  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View style={styles.modalOverlay}>
-      <View style={[styles.settingsModal, { backgroundColor: theme.cardBg }]}>
-        <Text style={[styles.modalTitle, { color: theme.text }]}>Settings</Text>
+}) => {
+  const [previewVisible, setPreviewVisible] = React.useState(false);
+  const theme = settings.darkMode ? darkTheme : lightTheme;
 
-        <ScrollView showsVerticalScrollIndicator={false}>
-          <View style={styles.settingsSection}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Notifications</Text>
+  const showPreview = () => {
+    setPreviewVisible(true);
+    setTimeout(() => setPreviewVisible(false), 2500);
+  };
 
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Enable Notifications</Text>
-              <Switch
-                value={settings.notificationsEnabled}
-                onValueChange={(val) =>
-                  onSettingsChange({ ...settings, notificationsEnabled: val })
-                }
-                trackColor={{ false: theme.emptyCell, true: theme.primary }}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Notification Time</Text>
-              <TextInput
-                style={[styles.timeInput, { color: theme.text, borderColor: theme.border }]}
-                value={settings.notificationTime}
-                onChangeText={(val) =>
-                  onSettingsChange({ ...settings, notificationTime: val })
-                }
-                placeholder="09:00"
-                placeholderTextColor={theme.subText}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Panel Type</Text>
-              <View style={styles.buttonGroup}>
-                {['Banner', 'Alert', 'Modal'].map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.optionButton,
-                      {
-                        backgroundColor:
-                          settings.notificationPanel === type
-                            ? theme.primary
-                            : theme.emptyCell,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                    onPress={() =>
-                      onSettingsChange({
-                        ...settings,
-                        notificationPanel: type as AppSettings['notificationPanel'],
-                      })
-                    }
-                  >
-                    <Text
-                      style={{
-                        color:
-                          settings.notificationPanel === type ? '#000' : theme.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* Appearance */}
-          <View style={styles.settingsSection}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Appearance</Text>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Dark Mode</Text>
-              <Switch
-                value={settings.darkMode}
-                onValueChange={(val) => onSettingsChange({ ...settings, darkMode: val })}
-                trackColor={{ false: theme.emptyCell, true: theme.primary }}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>
-                Show Sunday in Dashboard
-              </Text>
-              <Switch
-                value={settings.showSunday}
-                onValueChange={(val) => onSettingsChange({ ...settings, showSunday: val })}
-                trackColor={{ false: theme.emptyCell, true: theme.primary }}
-              />
-            </View>
-          </View>
-
-          {/* Sound */}
-          <View style={styles.settingsSection}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Sound & Tone</Text>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Sound Enabled</Text>
-              <Switch
-                value={settings.soundEnabled}
-                onValueChange={(val) => onSettingsChange({ ...settings, soundEnabled: val })}
-                trackColor={{ false: theme.emptyCell, true: theme.primary }}
-              />
-            </View>
-
-            <View style={styles.settingRow}>
-              <Text style={[styles.settingLabel, { color: theme.text }]}>Notification Tone</Text>
-              <View style={styles.buttonGroup}>
-                {['Default', 'Chime', 'Bell'].map((tone) => (
-                  <TouchableOpacity
-                    key={tone}
-                    style={[
-                      styles.optionButton,
-                      {
-                        backgroundColor:
-                          settings.notificationTone === tone
-                            ? theme.primary
-                            : theme.emptyCell,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                    onPress={() =>
-                      onSettingsChange({
-                        ...settings,
-                        notificationTone: tone as AppSettings['notificationTone'],
-                      })
-                    }
-                  >
-                    <Text
-                      style={{
-                        color:
-                          settings.notificationTone === tone ? '#000' : theme.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      {tone}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        <TouchableOpacity
-          style={[styles.closeButton, { backgroundColor: theme.primary }]}
-          onPress={onClose}
-        >
-          <Text style={styles.closeButtonText}>Close</Text>
-        </TouchableOpacity>
-      </View>
+  const Section: React.FC<SectionProps> = ({ title, children }) => (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: theme.cardBg,
+          borderColor: theme.border,
+          borderWidth: 1,
+          shadowColor: "#000",
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 3,
+        },
+      ]}
+    >
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: "700",
+          color: theme.primary,
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </Text>
+      {children}
     </View>
-  </Modal>
-);
+  );
+
+  return (
+    <View style={[styles.settingsPageContainer, { backgroundColor: theme.background }]}>
+      <StatusBar barStyle={settings.darkMode ? "light-content" : "dark-content"} />
+      <Text style={[styles.pageTitle, { color: theme.primary }]}>⚙️ Settings</Text>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* 🔔 Notifications Section */}
+        <Section title="Notifications">
+          <Text style={[styles.label, { color: theme.text }]}>Enable Notifications</Text>
+          <View style={{ borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+            <Picker
+              selectedValue={settings.notificationsEnabled ? "Enabled" : "Disabled"}
+              style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+              dropdownIconColor={theme.text}
+              onValueChange={(val) =>
+                onSettingsChange({ ...settings, notificationsEnabled: val === "Enabled" })
+              }
+            >
+              <Picker.Item label="Enabled" value="Enabled" />
+              <Picker.Item label="Disabled" value="Disabled" />
+            </Picker>
+          </View>
+
+          {settings.notificationsEnabled && (
+            <>
+              <Text style={[styles.label, { color: theme.text }]}>Notification Time</Text>
+              <View style={styles.timePickerRow}>
+                <Picker
+                  selectedValue={settings.notificationTime.split(":")[0]}
+                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+                  dropdownIconColor={theme.text}
+                  onValueChange={(hour) => {
+                    const [, minute] = settings.notificationTime.split(":");
+                    onSettingsChange({ ...settings, notificationTime: `${hour}:${minute}` });
+                  }}
+                >
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const h = String(i + 1).padStart(2, "0");
+                    return <Picker.Item key={h} label={h} value={h} />;
+                  })}
+                </Picker>
+
+                <Picker
+                  selectedValue={settings.notificationTime.split(":")[1]}
+                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+                  dropdownIconColor={theme.text}
+                  onValueChange={(minute) => {
+                    const [hour] = settings.notificationTime.split(":");
+                    onSettingsChange({ ...settings, notificationTime: `${hour}:${minute}` });
+                  }}
+                >
+                  {Array.from({ length: 60 }, (_, i) => {
+                    const m = String(i).padStart(2, "0");
+                    return <Picker.Item key={m} label={m} value={m} />;
+                  })}
+                </Picker>
+
+                <Picker
+                  selectedValue={settings.amPm}
+                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+                  dropdownIconColor={theme.text}
+                  onValueChange={(val) => onSettingsChange({ ...settings, amPm: val })}
+                >
+                  <Picker.Item label="AM" value="AM" />
+                  <Picker.Item label="PM" value="PM" />
+                </Picker>
+              </View>
+
+              <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Panel Type</Text>
+              <Picker
+                selectedValue={settings.notificationPanel}
+                style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+                dropdownIconColor={theme.text}
+                onValueChange={(val) => {
+                  onSettingsChange({
+                    ...settings,
+                    notificationPanel: val,
+                  });
+                  showPreview();
+                }}
+              >
+                <Picker.Item label="Banner" value="Banner" />
+                <Picker.Item label="Alert" value="Alert" />
+                <Picker.Item label="Modal" value="Modal" />
+              </Picker>
+            </>
+          )}
+        </Section>
+
+        {/* 🎨 Appearance Section */}
+        <Section title="Appearance">
+          <Text style={[styles.label, { color: theme.text }]}>Theme</Text>
+          <Picker
+            selectedValue={settings.darkMode ? "Dark" : "Light"}
+            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+            dropdownIconColor={theme.text}
+            onValueChange={(val) =>
+              onSettingsChange({ ...settings, darkMode: val === "Dark" })
+            }
+          >
+            <Picker.Item label="Light" value="Light" />
+            <Picker.Item label="Dark" value="Dark" />
+          </Picker>
+
+          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Show Sunday</Text>
+          <Picker
+            selectedValue={settings.showSunday ? "Yes" : "No"}
+            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+            dropdownIconColor={theme.text}
+            onValueChange={(val) =>
+              onSettingsChange({ ...settings, showSunday: val === "Yes" })
+            }
+          >
+            <Picker.Item label="Yes" value="Yes" />
+            <Picker.Item label="No" value="No" />
+          </Picker>
+        </Section>
+
+        {/* 🔊 Sound Section */}
+        <Section title="Sound">
+          <Text style={[styles.label, { color: theme.text }]}>Sound Enabled</Text>
+          <Picker
+            selectedValue={settings.soundEnabled ? "Enabled" : "Disabled"}
+            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+            dropdownIconColor={theme.text}
+            onValueChange={(val) =>
+              onSettingsChange({ ...settings, soundEnabled: val === "Enabled" })
+            }
+          >
+            <Picker.Item label="Enabled" value="Enabled" />
+            <Picker.Item label="Disabled" value="Disabled" />
+          </Picker>
+
+          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Notification Tone</Text>
+          <Picker
+            selectedValue={settings.notificationTone}
+            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
+            dropdownIconColor={theme.text}
+            onValueChange={(val) =>
+              onSettingsChange({ ...settings, notificationTone: val })
+            }
+          >
+            <Picker.Item label="Default" value="Default" />
+            <Picker.Item label="Chime" value="Chime" />
+            <Picker.Item label="Bell" value="Bell" />
+          </Picker>
+        </Section>
+
+        {/* ✅ Save Button */}
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            { backgroundColor: theme.primary, marginTop: 16 },
+          ]}
+        >
+          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>
+            Save Settings
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+};

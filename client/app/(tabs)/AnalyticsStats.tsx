@@ -1,8 +1,8 @@
-
 import { View } from "react-native";
-import { Theme } from "./TaskTab";
 import { Text } from "react-native-gesture-handler";
 import { styles } from "./styles";
+import { Theme } from "./TaskTab";
+
 interface AnalyticsStats {
   weekCompleted: number;
   monthCompleted: number;
@@ -11,54 +11,79 @@ interface AnalyticsStats {
   currentStreak: number;
   weekTotal: number;
   monthTotal: number;
+  customCompleted?: number;
+  customPercent?: number;
+  customTotal?: number;
 }
 
 interface AnalyticsViewProps {
   theme: Theme;
   stats: AnalyticsStats;
-  selectedView: 'weekly' | 'monthly';
+  selectedView: "weekly" | "monthly" | "custom";
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   theme,
   stats,
   selectedView,
-}) => (
-  <>
-    <View style={styles.statsGrid}>
-      {[
-        { label: 'Tasks Completed', value: selectedView === 'weekly' ? stats.weekCompleted : stats.monthCompleted },
-        { label: 'Completion Rate', value: `${selectedView === 'weekly' ? stats.weekPercent : stats.monthPercent}%` },
-        { label: 'Day Streak', value: stats.currentStreak },
-        { label: 'Total Tasks', value: selectedView === 'weekly' ? stats.weekTotal : stats.monthTotal },
-      ].map((item, idx) => (
-        <View key={idx} style={[styles.statCard, { backgroundColor: theme.cardBg }]}>
-          <Text style={[styles.statNumber, { color: theme.primary }]}>{item.value}</Text>
-          <Text style={[styles.statLabel, { color: theme.subText }]}>{item.label}</Text>
-        </View>
-      ))}
-    </View>
+}) => {
+  const completed =
+    selectedView === "weekly"
+      ? stats.weekCompleted
+      : selectedView === "monthly"
+      ? stats.monthCompleted
+      : stats.customCompleted ?? 0;
 
-    <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
-      <Text style={[styles.cardTitle, { color: theme.text }]}>Overall Progress</Text>
-      <View style={[styles.progressBar, { backgroundColor: theme.emptyCell }]}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${selectedView === 'weekly' ? stats.weekPercent : stats.monthPercent}%`,
-              backgroundColor: theme.primary,
-            },
-          ]}
-        />
+  const percent =
+    selectedView === "weekly"
+      ? stats.weekPercent
+      : selectedView === "monthly"
+      ? stats.monthPercent
+      : stats.customPercent ?? 0;
+
+  const total =
+    selectedView === "weekly"
+      ? stats.weekTotal
+      : selectedView === "monthly"
+      ? stats.monthTotal
+      : stats.customTotal ?? 0;
+
+  const labelPrefix =
+    selectedView === "custom" ? "Custom Range" : selectedView === "weekly" ? "Weekly" : "Monthly";
+
+  return (
+    <>
+      <View style={styles.statsGrid}>
+        {[
+          { label: `${labelPrefix} Tasks Completed`, value: completed },
+          { label: `${labelPrefix} Completion Rate`, value: `${percent}%` },
+          { label: "Day Streak", value: stats.currentStreak },
+          { label: `${labelPrefix} Total Tasks`, value: total },
+        ].map((item, idx) => (
+          <View key={idx} style={[styles.statCard, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.statNumber, { color: theme.primary }]}>{item.value}</Text>
+            <Text style={[styles.statLabel, { color: theme.subText }]}>{item.label}</Text>
+          </View>
+        ))}
       </View>
-      <Text style={[styles.progressText, { color: theme.subText }]}>
-        {selectedView === 'weekly' ? stats.weekCompleted : stats.monthCompleted} of{' '}
-        {selectedView === 'weekly' ? stats.weekTotal : stats.monthTotal} tasks completed
-      </Text>
-    </View>
-  </>
-);
 
-
-
+      <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
+        <Text style={[styles.cardTitle, { color: theme.text }]}>Overall Progress</Text>
+        <View style={[styles.progressBar, { backgroundColor: theme.emptyCell }]}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${percent}%`,
+                backgroundColor: theme.primary,
+              },
+            ]}
+          />
+        </View>
+        <Text style={[styles.progressText, { color: theme.subText }]}>
+          {completed} of {total} tasks completed
+        </Text>
+      </View>
+    </>
+  );
+};

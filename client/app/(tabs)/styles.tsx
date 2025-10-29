@@ -1,24 +1,106 @@
 import { StyleSheet, Dimensions } from 'react-native';
 const { width } = Dimensions.get('window');
+
 export const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 10,
-  },
-  // title: {
-  //   fontSize: 28,
-  //   fontWeight: 'bold',
-  // },
+  flex: 1,
+  paddingHorizontal: 16,
+  paddingTop: 20,
+  paddingBottom: 90, // slightly more for safe bottom space
+  backgroundColor: '#f8f9fa', // subtle neutral base
+},
+header: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 24,
+  marginTop: 12,
+  paddingHorizontal: 4,
+},
+tabContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginVertical: 10,
+  gap: 10,
+},
+tab: {
+  flex: 1,
+  paddingVertical: 12,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderWidth: 1,
+  elevation: 1, // soft shadow feel (Android)
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowOffset: { width: 0, height: 2 },
+  shadowRadius: 4,
+},
+statsGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 14,
+  marginVertical: 12,
+},
+statCard: {
+  width: (width - 48) / 2,
+  paddingVertical: 20,
+  paddingHorizontal: 12,
+  borderRadius: 16,
+  alignItems: 'center',
+  justifyContent: 'center',
+  elevation: 1,
+  shadowColor: '#000',
+  shadowOpacity: 0.05,
+  shadowOffset: { width: 0, height: 1 },
+  shadowRadius: 3,
+},
+addButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 16,
+  borderRadius: 14,
+  marginVertical: 12,
+  elevation: 2,
+  shadowColor: '#000',
+  shadowOpacity: 0.08,
+  shadowOffset: { width: 0, height: 3 },
+  shadowRadius: 5,
+},
+bottomNav: {
+  flexDirection: 'row',
+  justifyContent: 'space-around',
+  alignItems: 'center',
+  borderTopWidth: 1,
+  paddingVertical: 12,
+  position: 'absolute',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  height: 75,
+  backgroundColor: '#fff',
+  elevation: 12,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowOffset: { width: 0, height: -2 },
+  shadowRadius: 6,
+},
+navButton: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 12,
+  paddingVertical: 6,
+},
+
+
   headerButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   iconButton: {
     width: 44,
@@ -28,18 +110,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
+
   tabText: {
     fontSize: 16,
     fontWeight: '600',
@@ -82,6 +153,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 4,
+    justifyContent: 'center',
   },
   dayCell: {
     width: (width - 80) / 7,
@@ -144,18 +216,6 @@ export const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 12,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    width: (width - 44) / 2,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
   statNumber: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -195,14 +255,6 @@ export const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
   },
   addButtonIcon: {
     fontSize: 24,
@@ -369,16 +421,6 @@ export const styles = StyleSheet.create({
   settingsSection: {
     marginBottom: 24,
   },
-  // settingRow: {
-  //   flexDirection: 'row',
-  //   justifyContent: 'space-between',
-  //   alignItems: 'center',
-  //   paddingVertical: 12,
-  // },
-  // settingLabel: {
-  //   fontSize: 14,
-  //   flex: 1,
-  // },
   timeInput: {
     borderWidth: 1,
     borderRadius: 8,
@@ -444,47 +486,61 @@ export const styles = StyleSheet.create({
     borderRadius: 12,
   },
 
-  bottomNav: {
-  flexDirection: 'row',
-  justifyContent: 'space-around',
-  alignItems: 'center',
-  borderTopWidth: 1,
-  paddingVertical: 8,
-  position: 'absolute',
-  bottom: 0,
-  left: 0,
-  right: 0,
-  height: 70,
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 10,
+    marginHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginVertical: 16,
+    marginLeft: 16,
+  },
+  settingRowNoLine: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingVertical: 12,
+  marginHorizontal: 8,
 },
-
-navButton: {
+amPmButton: {
+  backgroundColor: "#FFA500",
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 8,
+},
+timePickerRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
+pickerCompact: {
+  width: 80,
+  height: 44,
+  backgroundColor: "#222",
+  color: "#fff",
+  borderRadius: 8,
+},
+settingsPageContainer: {
   flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-  paddingVertical: 8,
-  borderRadius: 10,
+  padding: 20,
+  paddingTop: 50,
 },
-
-settingRow: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginVertical: 10,
-  marginHorizontal: 16,
-  paddingVertical: 10,
-  borderBottomWidth: 1,
-},
-
-settingLabel: {
-  fontSize: 16,
-  fontWeight: '500',
-},
-
-title: {
-  fontSize: 20,
-  fontWeight: 'bold',
-  marginVertical: 16,
-  marginLeft: 16,
+pageTitle: {
+  fontSize: 24,
+  fontWeight: "bold",
+  marginBottom: 24,
+  color: "#FFA500",
+  textAlign: "center",
 },
 
 });

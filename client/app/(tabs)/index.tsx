@@ -1,607 +1,626 @@
-import React, { useEffect, useState } from "react";
-import { ScrollView } from "react-native-gesture-handler";
-import { SwipeableTask } from "./SwipeableTask";
-import { Modal, TouchableOpacity, View, Text, TextInput } from "react-native";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Animated,
+  Image,
+  TextInput,
+  Modal,
+} from "react-native";
 import { styles } from "./styles";
-import { Settings } from "./Settings"; 
-import { NotificationPanel } from "./Notification";
+import { SwipeableTask } from "./SwipeableTask";
 import { CalendarView } from "./Calendar";
 import { AnalyticsView } from "./AnalyticsStats";
+import { Settings } from "./Settings";
+import { NotificationPanel } from "./Notification";
 import { CustomDateRangePicker } from "./CustomDatePicker";
-
-interface SettingsType {
-  notificationsEnabled: boolean;
-  notificationTime: string;
-  notificationPanel: "Modal" | "Banner" | "Alert";
-  darkMode: boolean;
-  showSunday: boolean;
-  soundEnabled: boolean;
-  notificationTone: "Default" | "Chime" | "Bell"; 
-}
-
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { darkTheme, lightTheme } from "./TaskTab";
 
 interface Task {
   id: string;
   name: string;
   completed: boolean;
-  dateKey?: string;
+  dateKey: string;
+  completedAt?: string;
+  createdAt: string;
 }
 
-interface CustomDateRange {
-  from: string;
-  to: string;
+interface SettingsProps {
+  amPm: "AM" | "PM";
+  notificationsEnabled: boolean;
+  notificationTime: string;
+  notificationPanel: "Banner" | "Alert" | "Modal";
+  darkMode: boolean;
+  showSunday: boolean;
+  soundEnabled: boolean;
+  notificationTone: "Default" | "Chime" | "Bell";
 }
 
-interface MonthDataItem {
-  day: number | null;
-  completed: boolean;
-  dateKey?: string;
-  taskCount: number;      
-  completedCount: number; 
-}
 
-
-interface Stats {
-  weekCompleted: number;
-  weekTotal: number;
-  weekPercent: number;
-  monthCompleted: number;
-  monthTotal: number;
-  monthPercent: number;
-  customCompleted: number;
-  customTotal: number;
-  customPercent: number;
-  currentStreak: number;
-}
-
-interface GetFirstDayOfMonth {
-  (year: number, month: number): number;
-}
-
-const monthNames = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
 
 export default function Dashboard() {
-const [settings, setSettings] = useState<SettingsType>({
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "tasks" | "settings"
+  >("dashboard");
+
+  const [settings, setSettings] = useState<SettingsProps>({
+  amPm: "AM",
   notificationsEnabled: true,
-  notificationTime: '09:00',
-  notificationPanel: 'Modal',
-  darkMode: true,
-  showSunday: false,
+  notificationTime: "09:00",
+  notificationPanel: "Banner", 
+  darkMode: false,
+  showSunday: true,
   soundEnabled: true,
-  notificationTone: 'Default', 
+  notificationTone: "Default",
 });
 
+const generateInitialTasks = (): Record<string, Task[]> => {
+  const initial: Record<string, Task[]> = {};
+  const today = new Date();
+  const taskTemplates = [
+    "Morning workout",
+    "Read 30 pages",
+    "Meditate 10 min",
+    "Drink 8 glasses of water",
+    "Review daily goals",
+    "Evening walk",
+  ];
 
-  const [showSettings, setShowSettings] = useState(false);
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split("T")[0];
+    const numTasks = Math.floor(Math.random() * 4) + 2;
+    initial[key] = taskTemplates.slice(0, numTasks).map((name, idx) => {
+      const completed = Math.random() > 0.4;
+      const createdTime = new Date(d.getTime() + idx * 1000);
+      const completedTime = completed
+        ? new Date(createdTime.getTime() + Math.random() * 7200000)
+        : undefined;
+
+      return {
+        id: `${key}-${idx}`,
+        name,
+        completed,
+        dateKey: key,
+        createdAt: createdTime.toISOString(),
+        completedAt: completedTime?.toISOString(),
+      };
+    });
+  }
+  return initial;
+};
+
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTaskName, setNewTaskName] = useState("");
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTaskName, setNewTaskName] = useState('');
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks'>('dashboard');
-  const [selectedView, setSelectedView] = useState<'weekly' | 'monthly' | 'custom'>('monthly');
-  const [customDateRange, setCustomDateRange] = useState<CustomDateRange>({ from: '', to: '' });
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const [selectedView, setSelectedView] = useState<
+    "weekly" | "monthly" | "custom"
+  >("monthly");
+  const [customDateRange, setCustomDateRange] = useState({ from: "", to: "" });
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [previewVisible, setPreviewVisible] = React.useState(false);
 
-  const [tasks, setTasks] = useState<Record<string, Task[]>>(() => {
-    const initialTasks: Record<string, Task[]> = {};
+
+React.useEffect(() => {
+  Animated.timing(fadeAnim, {
+    toValue: 1,
+    duration: 400,
+    useNativeDriver: true,
+  }).start();
+}, []);
+
+
+  const [tasks, setTasks] = useState<Record<string, Task[]>>(
+    generateInitialTasks
+  );
+
+const theme = settings.darkMode ? darkTheme : lightTheme;
+
+  const stats = useMemo(() => {
     const today = new Date();
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateKey = date.toISOString().split('T')[0];
-      initialTasks[dateKey] = [
-        { id: `${dateKey}-1`, name: 'Morning workout', completed: Math.random() > 0.5 },
-        { id: `${dateKey}-2`, name: 'Read 30 pages', completed: Math.random() > 0.5 },
-        { id: `${dateKey}-3`, name: 'Meditate', completed: Math.random() > 0.5 },
-      ];
-    }
-    
-    return initialTasks;
-  });
-
-  const theme = {
-    background: settings.darkMode ? '#0a0a0a' : '#f5f5f5',
-    cardBg: settings.darkMode ? '#1a1a1a' : '#ffffff',
-    text: settings.darkMode ? '#ffffff' : '#1a1a1a',
-    subText: settings.darkMode ? '#888888' : '#666666',
-    primary: '#ff8c42',
-    primaryDark: '#e67e3c',
-    emptyCell: settings.darkMode ? '#2a2a2a' : '#e0e0e0',
-    border: settings.darkMode ? '#333333' : '#d0d0d0',
-    success: '#4caf50',
-    danger: '#f44336',
-  };
-
-  useEffect(() => {
-    if (settings.notificationsEnabled) {
-      const checkNotifications = () => {
-        const now = new Date();
-        const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        if (currentTime === settings.notificationTime) {
-          const todayTasks = tasks[selectedDate] || [];
-          const incompleteTasks = todayTasks.filter(t => !t.completed).length;
-          if (incompleteTasks > 0) {
-            setNotificationMessage(`You have ${incompleteTasks} task${incompleteTasks > 1 ? 's' : ''} remaining today!`);
-            setShowNotification(true);
-          }
-        }
-      };
-      checkNotifications(); 
-      const interval = setInterval(checkNotifications, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [settings, tasks, selectedDate]);
-
-  const getDaysInMonth = (year: number, month: number): number => new Date(year, month + 1, 0).getDate();
-  const getFirstDayOfMonth: GetFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
-  
-  const getMonthData = (): MonthDataItem[] => {
-    const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
-    const firstDay = getFirstDayOfMonth(selectedYear, selectedMonth);
-    const monthData: MonthDataItem[] = [];
-    
-    for (let i = 0; i < firstDay; i++) {
-      monthData.push({ day: null, completed: false, taskCount: 0, completedCount: 0 });
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dateTasks = tasks[dateKey] || [];
-      const completedCount = dateTasks.filter(t => t.completed).length;
-      const allCompleted = dateTasks.length > 0 && completedCount === dateTasks.length;
-      
-      monthData.push({
-        day,
-        completed: allCompleted,
-        dateKey,
-        taskCount: dateTasks.length,
-        completedCount: completedCount,
-      });
-    }
-
-    return monthData;
-  };
-
-  const calculateStats = (fromDate: string | null = null, toDate: string | null = null): Stats => {
-    const today = new Date();
+    const todayKey = today.toISOString().split("T")[0];
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
     const monthAgo = new Date(today);
     monthAgo.setDate(monthAgo.getDate() - 30);
 
-    const startDate = fromDate ? new Date(fromDate) : weekAgo;
-    const endDate = toDate ? new Date(toDate) : today;
+    let weekCompleted = 0;
+    let weekTotal = 0;
+    let monthCompleted = 0;
+    let monthTotal = 0;
+    let currentStreak = 0;
+    let longestStreak = 0;
+    let tempStreak = 0;
+    let totalCompletionTime = 0;
+    let completionCount = 0;
+    const hourlyDistribution = new Array(24).fill(0);
 
-    let weekCompleted = 0, weekTotal = 0;
-    let monthCompleted = 0, monthTotal = 0;
-    let customCompleted = 0, customTotal = 0;
+    // Calculate streaks by checking consecutive days
+    const sortedDates = Object.keys(tasks)
+      .sort()
+      .reverse();
+    let streakBroken = false;
 
-    Object.keys(tasks).forEach(dateKey => {
+    for (const dateKey of sortedDates) {
       const date = new Date(dateKey);
       const dateTasks = tasks[dateKey] || [];
-      const completed = dateTasks.filter(t => t.completed).length;
+      const completed = dateTasks.filter((t) => t.completed).length;
       const total = dateTasks.length;
+      const allCompleted = total > 0 && completed === total;
 
+      // Streak calculation
+      if (allCompleted) {
+        tempStreak++;
+        longestStreak = Math.max(longestStreak, tempStreak);
+        if (!streakBroken && date <= today) {
+          currentStreak = tempStreak;
+        }
+      } else {
+        if (!streakBroken && date < today) {
+          streakBroken = true;
+        }
+        tempStreak = 0;
+      }
+
+      // Week and month stats
       if (date >= weekAgo && date <= today) {
-        weekTotal += total;
         weekCompleted += completed;
+        weekTotal += total;
       }
       if (date >= monthAgo && date <= today) {
-        monthTotal += total;
         monthCompleted += completed;
+        monthTotal += total;
       }
-      if (fromDate && toDate && date >= startDate && date <= endDate) {
-        customTotal += total;
-        customCompleted += completed;
-      }
-    });
+
+      // Completion time analysis
+      dateTasks.forEach((task) => {
+        if (task.completed && task.completedAt && task.createdAt) {
+          const created = new Date(task.createdAt);
+          const completedTime = new Date(task.completedAt);
+          const timeToComplete =
+            (completedTime.getTime() - created.getTime()) / (1000 * 60);
+          totalCompletionTime += timeToComplete;
+          completionCount++;
+
+          const hour = completedTime.getHours();
+          hourlyDistribution[hour]++;
+        }
+      });
+    }
+
+    const avgCompletionTime =
+      completionCount > 0 ? Math.round(totalCompletionTime / completionCount) : 0;
+    const mostProductiveHour = hourlyDistribution.indexOf(
+      Math.max(...hourlyDistribution)
+    );
+
+    // Today's stats
+    const todayTasks = tasks[todayKey] || [];
+    const todayCompleted = todayTasks.filter((t) => t.completed).length;
 
     return {
+      todayCompleted,
+      todayTotal: todayTasks.length,
+      todayPercent: todayTasks.length
+        ? Math.round((todayCompleted / todayTasks.length) * 100)
+        : 0,
       weekCompleted,
       weekTotal,
-      weekPercent: weekTotal > 0 ? Math.round((weekCompleted / weekTotal) * 100) : 0,
+      weekPercent: weekTotal ? Math.round((weekCompleted / weekTotal) * 100) : 0,
       monthCompleted,
       monthTotal,
-      monthPercent: monthTotal > 0 ? Math.round((monthCompleted / monthTotal) * 100) : 0,
-      customCompleted,
-      customTotal,
-      customPercent: customTotal > 0 ? Math.round((customCompleted / customTotal) * 100) : 0,
-      currentStreak: calculateStreak(),
+      monthPercent: monthTotal
+        ? Math.round((monthCompleted / monthTotal) * 100)
+        : 0,
+      currentStreak,
+      longestStreak,
+      avgCompletionTime,
+      mostProductiveHour:
+        mostProductiveHour >= 0 ? `${mostProductiveHour}:00` : "N/A",
     };
-  };
+  }, [tasks]);
 
-  const calculateStreak = (): number => {
-    const today = new Date();
-    let streak = 0;
-    for (let i = 0; i < 365; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateKey = date.toISOString().split('T')[0];
-      const dateTasks = tasks[dateKey] || [];
-      const allCompleted = dateTasks.length > 0 && dateTasks.every(t => t.completed);
+  // Fixed monthData to properly handle Sunday toggle
+  const monthData = useMemo(() => {
+    const days = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const firstDay = new Date(selectedYear, selectedMonth, 1).getDay();
+    const md: any[] = [];
+
+    // Adjust first day based on showSunday setting
+    // If showSunday is false, treat Monday as day 0
+    const adjustedFirstDay = settings.showSunday
+      ? firstDay
+      : firstDay === 0
+      ? 6
+      : firstDay - 1;
+
+    // Add empty cells before the first day
+    for (let i = 0; i < adjustedFirstDay; i++) {
+      md.push({ day: null, completed: false, taskCount: 0, completedCount: 0 });
+    }
+
+    // Add actual days
+    for (let d = 1; d <= days; d++) {
+      const key = `${selectedYear}-${String(selectedMonth + 1).padStart(
+        2,
+        "0"
+      )}-${String(d).padStart(2, "0")}`;
+      const dateTasks = tasks[key] || [];
+      const completedCount = dateTasks.filter((t) => t.completed).length;
+      const allCompleted = dateTasks.length > 0 && completedCount === dateTasks.length;
       
-      if (allCompleted) {
-        streak++;
-      } else {
-        break;
+      md.push({
+        day: d,
+        completed: allCompleted,
+        dateKey: key,
+        taskCount: dateTasks.length,
+        completedCount,
+      });
+    }
+    return md;
+  }, [selectedYear, selectedMonth, tasks, settings.showSunday]);
+
+useEffect(() => {
+  if (!settings.notificationsEnabled) return;
+
+  const checkTime = () => {
+    const now = new Date();
+    const [rawHours, rawMinutes] = settings.notificationTime.split(":").map(Number);
+
+    // Convert to 24-hour format based on AM/PM
+    let hours = rawHours;
+    if (settings.amPm === "PM" && rawHours < 12) hours += 12;
+    if (settings.amPm === "AM" && rawHours === 12) hours = 0;
+
+    if (now.getHours() === hours && now.getMinutes() === rawMinutes) {
+      const todayKey = now.toISOString().split("T")[0];
+      const todayTasks = tasks[todayKey] || [];
+      const remaining = todayTasks.filter((t) => !t.completed).length;
+
+      if (remaining > 0) {
+        setNotificationMessage(
+          `⏰ You have ${remaining} task${remaining > 1 ? "s" : ""} remaining today!`
+        );
+        setNotificationVisible(true);
       }
     }
-    return streak;
   };
 
-  const addTask = (): void => {
-    if (newTaskName.trim()) {
+  checkTime();
+  const interval = setInterval(checkTime, 60000);
+
+  return () => clearInterval(interval);
+}, [settings.notificationsEnabled, settings.notificationTime, settings.amPm, tasks]);
+
+
+  // Task operations
+  const toggleTaskCompletion = useCallback((dateKey: string, taskId: string) => {
+    setTasks((prev) => {
+      const copy = { ...prev };
+      copy[dateKey] = copy[dateKey].map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              completed: !t.completed,
+              completedAt: !t.completed ? new Date().toISOString() : undefined,
+            }
+          : t
+      );
+      return copy;
+    });
+  }, []);
+
+  const deleteTask = useCallback((dateKey?: string, taskId?: string) => {
+    if (!dateKey || !taskId) return;
+    setTasks((prev) => {
+      const copy = { ...prev };
+      copy[dateKey] = copy[dateKey].filter((t) => t.id !== taskId);
+      return copy;
+    });
+    setNotificationMessage("🗑️ Task deleted");
+    setNotificationVisible(true);
+  }, []);
+
+  const addTask = useCallback(() => {
+    if (!newTaskName.trim()) return;
+
+    setTasks((prev) => {
+      const copy = { ...prev };
+      if (!copy[selectedDate]) copy[selectedDate] = [];
+
       const newTask: Task = {
         id: `${selectedDate}-${Date.now()}`,
         name: newTaskName.trim(),
         completed: false,
+        dateKey: selectedDate,
+        createdAt: new Date().toISOString(),
       };
-      
-      setTasks(prev => ({
-        ...prev,
-        [selectedDate]: [...(prev[selectedDate] || []), newTask],
-      }));
-      
-      setNewTaskName('');
-      setShowAddTask(false);
+
+      copy[selectedDate] = [...copy[selectedDate], newTask];
+      return copy;
+    });
+
+    setNewTaskName("");
+    setShowAddTask(false);
+    setNotificationMessage("✅ Task added successfully!");
+    setNotificationVisible(true);
+  }, [newTaskName, selectedDate]);
+
+  const changeMonth = useCallback((direction: number) => {
+    setSelectedMonth((prev) => {
+      const newMonth = prev + direction;
+      if (newMonth > 11) {
+        setSelectedYear((y) => y + 1);
+        return 0;
+      }
+      if (newMonth < 0) {
+        setSelectedYear((y) => y - 1);
+        return 11;
+      }
+      return newMonth;
+    });
+  }, []);
+
+const animateFade = useCallback(() => {
+  fadeAnim.setValue(0);
+  Animated.timing(fadeAnim, {
+    toValue: 1,
+    duration: 400,
+    useNativeDriver: true,
+  }).start();
+}, [fadeAnim]);
+
+
+  useEffect(() => {
+    animateFade();
+  }, [activeTab, animateFade]);
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case "dashboard":
+        return (
+          <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 100 }}
+            >
+              {/* Month Navigation */}
+              <View style={[styles.card, { backgroundColor: theme.cardBg, marginTop: 12, padding: 16 }]}>
+                <View style={styles.monthSelector}>
+                  <TouchableOpacity
+                    onPress={() => changeMonth(-1)}
+                    style={[styles.monthButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
+                  >
+                    <Text style={{ color: theme.text, fontSize: 18 }}>←</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.monthText, { color: theme.text }]}>
+                    {new Date(selectedYear, selectedMonth).toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => changeMonth(1)}
+                    style={[styles.monthButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
+                  >
+                    <Text style={{ color: theme.text, fontSize: 18 }}>→</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <CalendarView
+                  theme={theme}
+                  monthData={monthData}
+                  settings={settings}
+                  onDayPress={(item) => {
+                    if (item?.dateKey) {
+                      setSelectedDate(item.dateKey);
+                      setActiveTab("tasks");
+                    }
+                  }}
+                />
+              </View>
+
+              {/* Analytics Section */}
+              <View style={{ paddingHorizontal: 16, marginTop: 20 }}>
+                <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 10 }]}>
+                  📈 Analytics & Insights
+                </Text>
+                <AnalyticsView
+                  theme={theme}
+                  stats={stats as any}
+                  selectedView={selectedView}
+                />
+              </View>
+            </ScrollView>
+          </Animated.View>
+        );
+
+      case "tasks":
+        const selectedDateTasks = tasks[selectedDate] || [];
+        return (
+          <Animated.View style={{ opacity: fadeAnim, flex: 1 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+              <View style={[styles.card, { backgroundColor: theme.cardBg, marginTop: 12, padding: 16 }]}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>
+                    {new Date(selectedDate).toLocaleDateString("en-US", {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAddTask(true)}
+                    style={{
+                      backgroundColor: theme.primary,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>+</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {selectedDateTasks.length === 0 ? (
+                  <View style={[styles.emptyState, { backgroundColor: theme.cardBg, paddingVertical: 40 }]}>
+                    <Text style={{ color: theme.subText, fontSize: 48, marginBottom: 12 }}>📝</Text>
+                    <Text style={{ color: theme.subText, fontSize: 16 }}>No tasks for this day</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowAddTask(true)}
+                      style={{
+                        marginTop: 16,
+                        paddingVertical: 12,
+                        paddingHorizontal: 24,
+                        backgroundColor: theme.primary,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>Add Your First Task</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  selectedDateTasks.map((t) => (
+                    <SwipeableTask
+                      key={t.id}
+                      task={t}
+                      dateKey={selectedDate}
+                      theme={theme}
+                      onToggle={toggleTaskCompletion}
+                      onSelect={() => deleteTask(selectedDate, t.id)}
+                    />
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          </Animated.View>
+        );
+
+        
+      case "settings":
+        return (
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              flex: 1,
+              backgroundColor: theme.background,
+            }}
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingTop: 16,
+                paddingBottom: 140,
+              }}
+            >
+<Settings
+  theme={theme}
+  settings={settings}
+  onSettingsChange={setSettings}
+/>
+            </ScrollView>
+          </Animated.View>
+        );
+
     }
   };
 
-  const toggleTaskCompletion = (dateKey: string, taskId: string): void => {
-    setTasks(prev => {
-      const updated = { ...prev };
-      if (updated[dateKey]) {
-        updated[dateKey] = updated[dateKey].map(task =>
-          task.id === taskId ? { ...task, completed: !task.completed } : task
-        );
-      }
-      return updated;
-    });
-  };
-
-  const deleteTask = (dateKey?: string, taskId?: string): void => {
-    if (!dateKey || !taskId) return;
-    setTasks(prev => {
-      const updated = { ...prev };
-      if (updated[dateKey]) {
-        updated[dateKey] = updated[dateKey].filter(t => t.id !== taskId);
-      }
-      return updated;
-    });
-    setSelectedTask(null);
-  };
-
-  const handleCustomDateRange = (from: string, to: string): void => {
-    setCustomDateRange({ from, to });
-    setSelectedView('custom');
-    setShowDatePicker(false);
-  };
-
-  const monthData = getMonthData();
-  const selectedDateTasks = tasks[selectedDate] || [];
-  
-  const stats = selectedView === 'custom' && customDateRange.from && customDateRange.to
-    ? calculateStats(customDateRange.from, customDateRange.to)
-    : calculateStats();
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background, flex: 1 }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>Task Tracker</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
-            onPress={() => setShowSettings(true)}
-          >
-            <Text style={{ color: theme.primary, fontSize: 20 }}>⚙️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: theme.cardBg, borderColor: theme.border }]}
-            onPress={() => setSettings({ ...settings, darkMode: !settings.darkMode })}
-          >
-            <Text style={{ color: theme.primary, fontSize: 20 }}>
-              {settings.darkMode ? '☀️' : '🌙'}
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor: activeTab === 'dashboard' ? theme.primary : theme.cardBg,
-              borderColor: theme.border,
-            },
-          ]}
-          onPress={() => setActiveTab('dashboard')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'dashboard' ? '#000' : theme.text }]}>
-            Dashboard
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor: activeTab === 'tasks' ? theme.primary : theme.cardBg,
-              borderColor: theme.border,
-            },
-          ]}
-          onPress={() => setActiveTab('tasks')}
-        >
-          <Text style={[styles.tabText, { color: activeTab === 'tasks' ? '#000' : theme.text }]}>
-            Tasks
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {renderContent()}
 
-      {activeTab === 'dashboard' ? (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Month Selector */}
-          <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
-            <View style={styles.monthSelector}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedMonth === 0) {
-                    setSelectedMonth(11);
-                    setSelectedYear(selectedYear - 1);
-                  } else {
-                    setSelectedMonth(selectedMonth - 1);
-                  }
-                }}
-                style={[styles.monthButton, { borderColor: theme.border }]}
-              >
-                <Text style={{ color: theme.primary, fontSize: 20 }}>←</Text>
-              </TouchableOpacity>
-              
-              <Text style={[styles.monthText, { color: theme.text }]}>
-                {monthNames[selectedMonth]} {selectedYear}
-              </Text>
-              
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedMonth === 11) {
-                    setSelectedMonth(0);
-                    setSelectedYear(selectedYear + 1);
-                  } else {
-                    setSelectedMonth(selectedMonth + 1);
-                  }
-                }}
-                style={[styles.monthButton, { borderColor: theme.border }]}
-              >
-                <Text style={{ color: theme.primary, fontSize: 20 }}>→</Text>
-              </TouchableOpacity>
-            </View>
-
-          <CalendarView
-        theme={theme} 
-       monthData={monthData}
-        settings={settings}
-        onDayPress={(item) => {
-          // Use item.dateKey if CalendarItem has it, otherwise use item.day or another unique identifier
-          if ('dateKey' in item && item.dateKey) {
-            if (typeof item.dateKey === 'string') {
-              setSelectedDate(item.dateKey);
-              setActiveTab('tasks');
-            }
-          }
+      {/* Bottom Tab Bar */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "center",
+          backgroundColor: theme.cardBg,
+          borderTopWidth: 1,
+          borderColor: theme.border,
+          paddingVertical: 10,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          shadowColor: "#000",
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
         }}
-        />
-
-
-
-            <View style={styles.legend}>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendBox, { backgroundColor: theme.emptyCell }]} />
-                <Text style={[styles.legendText, { color: theme.subText }]}>Incomplete</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.legendBox, { backgroundColor: theme.primary }]} />
-                <Text style={[styles.legendText, { color: theme.subText }]}>All Done</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Analytics Section */}
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Analytics</Text>
-
-          {/* View Selector */}
-          <View style={styles.viewSelector}>
-            {['weekly', 'monthly', 'custom'].map((view) => (
-              <TouchableOpacity
-                key={view}
-                style={[
-                  styles.viewButton,
-                  {
-                    backgroundColor: selectedView === view ? theme.primary : theme.cardBg,
-                    borderColor: theme.border,
-                  },
-                ]}
-                onPress={() => {
-                  if (view === 'custom') {
-                    setShowDatePicker(true);
-                  } else {
-                    setSelectedView(view as 'weekly' | 'monthly' | 'custom');
-                  }
+      >
+        {[
+          { key: "dashboard", icon: "🏠", label: "Home" },
+          {
+            key: "tasks",
+            icon: (
+              <Image
+                source={require("../../assets/images/task-done_17790807.png")}
+                style={{
+                  width: 22,
+                  height: 22,
+                  tintColor: activeTab === "tasks" ? theme.primary : theme.subText,
                 }}
-              >
-                <Text
-                  style={[
-                    styles.viewButtonText,
-                    { color: selectedView === view ? '#000' : theme.text },
-                  ]}
-                >
-                  {view.charAt(0).toUpperCase() + view.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {selectedView === 'custom' && customDateRange.from && customDateRange.to && (
-            <Text style={[styles.dateRangeText, { color: theme.subText }]}>
-              {customDateRange.from} to {customDateRange.to}
-            </Text>
-          )}
-
-          <AnalyticsView
-            theme={theme} 
-            stats={stats} 
-            selectedView={selectedView === 'custom' ? 'monthly' : selectedView} 
-          />
-        </ScrollView>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Date Selector for Tasks */}
-          <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>
-              {new Date(selectedDate).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </Text>
-            <View style={styles.dateNavigation}>
-              <TouchableOpacity
-                style={[styles.dateButton, { borderColor: theme.border }]}
-                onPress={() => {
-                  const date = new Date(selectedDate);
-                  date.setDate(date.getDate() - 1);
-                  setSelectedDate(date.toISOString().split('T')[0]);
-                }}
-              >
-                <Text style={{ color: theme.primary }}>← Previous</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dateButton, { borderColor: theme.border }]}
-                onPress={() => {
-                  setSelectedDate(new Date().toISOString().split('T')[0]);
-                }}
-              >
-                <Text style={{ color: theme.primary }}>Today</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dateButton, { borderColor: theme.border }]}
-                onPress={() => {
-                  const date = new Date(selectedDate);
-                  date.setDate(date.getDate() + 1);
-                  setSelectedDate(date.toISOString().split('T')[0]);
-                }}
-              >
-                <Text style={{ color: theme.primary }}>Next →</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Add Task Button */}
+              />
+            ),
+            label: "Tasks",
+          },
+          { key: "settings", icon: "⚙️", label: "Settings" },
+        ].map((tab) => (
           <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: theme.primary }]}
-            onPress={() => setShowAddTask(true)}
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key as any)}
+            style={{ alignItems: "center", justifyContent: "center", flex: 1 }}
           >
-            <Text style={styles.addButtonIcon}>+</Text>
-            <Text style={styles.addButtonText}>Add New Task</Text>
-          </TouchableOpacity>
-
-          {/* Tasks List */}
-          <View style={styles.tasksContainer}>
-            {selectedDateTasks.length === 0 ? (
-              <View style={[styles.emptyState, { backgroundColor: theme.cardBg }]}>
-                <Text style={[styles.emptyStateText, { color: theme.subText }]}>
-                  No tasks for this day
-                </Text>
-                <Text style={[styles.emptyStateSubtext, { color: theme.subText }]}>
-                  Tap the + button to add a task
-                </Text>
-              </View>
+            {typeof tab.icon === "string" ? (
+              <Text
+                style={{
+                  fontSize: 20,
+                  color: activeTab === tab.key ? theme.primary : theme.subText,
+                }}
+              >
+                {tab.icon}
+              </Text>
             ) : (
-              selectedDateTasks.map(task => (
-<SwipeableTask
-  key={task.id}
-  task={task}
-  dateKey={selectedDate}
-  theme={theme}
-  onToggle={toggleTaskCompletion}
-  onSelect={() => deleteTask(selectedDate, task.id)} 
-/>
-
-
-              ))
+              tab.icon
             )}
-          </View>
-
-          {/* Task Summary */}
-          {selectedDateTasks.length > 0 && (
-            <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Today's Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryText, { color: theme.subText }]}>Total Tasks:</Text>
-                <Text style={[styles.summaryValue, { color: theme.text }]}>{selectedDateTasks.length}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryText, { color: theme.subText }]}>Completed:</Text>
-                <Text style={[styles.summaryValue, { color: theme.success }]}>
-                  {selectedDateTasks.filter(t => t.completed).length}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryText, { color: theme.subText }]}>Remaining:</Text>
-                <Text style={[styles.summaryValue, { color: theme.danger }]}>
-                  {selectedDateTasks.filter(t => !t.completed).length}
-                </Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
-      )}
-
-      <Settings
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        theme={theme}
-        settings={settings}
-        onSettingsChange={setSettings}
-      />
-
-      <CustomDateRangePicker
-        visible={showDatePicker}
-        onClose={() => setShowDatePicker(false)}
-        theme={theme}
-        onApply={handleCustomDateRange}
-      />
-
-      {/* Notification Panel */}
-      <NotificationPanel
-        visible={showNotification}
-        onClose={() => setShowNotification(false)}
-        theme={theme}
-        message={notificationMessage}
-        panelType={settings.notificationPanel as 'Banner' | 'Alert' | 'Modal'}
-      />
+            <Text
+              style={{
+                fontSize: 12,
+                color: activeTab === tab.key ? theme.primary : theme.subText,
+              }}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Add Task Modal */}
-      <Modal
-        visible={showAddTask}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddTask(false)}
-      >
+      <Modal visible={showAddTask} transparent animationType="slide" onRequestClose={() => setShowAddTask(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>Add New Task</Text>
             <TextInput
-              style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+              style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
               placeholder="Enter task name..."
               placeholderTextColor={theme.subText}
               value={newTaskName}
@@ -611,75 +630,40 @@ const [settings, setSettings] = useState<SettingsType>({
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: theme.emptyCell }]}
-                onPress={() => {
-                  setNewTaskName('');
-                  setShowAddTask(false);
-                }}
+                onPress={() => setShowAddTask(false)}
               >
                 <Text style={[styles.modalButtonText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: theme.primary }]}
                 onPress={addTask}
+                disabled={!newTaskName.trim()}
               >
-                <Text style={[styles.modalButtonText, { color: '#000' }]}>Add Task</Text>
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>Add Task</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      <Modal
-        visible={selectedTask !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedTask(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.cardBg }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Task Details</Text>
-            <Text style={[styles.taskDetailName, { color: theme.text }]}>
-              {selectedTask?.name}
-            </Text>
-            <View style={styles.taskDetailStatus}>
-              <Text style={[styles.taskDetailLabel, { color: theme.subText }]}>Status:</Text>
-              <Text style={[
-                styles.taskDetailValue,
-                { color: selectedTask?.completed ? theme.success : theme.danger }
-              ]}>
-                {selectedTask?.completed ? '✓ Completed' : '✗ Not Completed'}
-              </Text>
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: theme.danger }]}
-                onPress={() => deleteTask(selectedTask?.dateKey, selectedTask?.id)}
-              >
-                <Text style={[styles.modalButtonText, { color: '#fff' }]}>Delete</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: theme.primary }]}
-                onPress={() => {
-                  if (selectedTask?.dateKey && selectedTask?.id) {
-                    toggleTaskCompletion(selectedTask.dateKey, selectedTask.id);
-                  }
-                  setSelectedTask(null);
-                }}
-              >
-                <Text style={[styles.modalButtonText, { color: '#000' }]}>
-                  {selectedTask?.completed ? 'Mark Incomplete' : 'Mark Complete'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={[styles.closeButton, { borderColor: theme.border }]}
-              onPress={() => setSelectedTask(null)}
-            >
-              <Text style={[styles.closeButtonText, { color: theme.text }]}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </View>
+      <NotificationPanel
+        visible={notificationVisible}
+        onClose={() => setNotificationVisible(false)}
+        theme={theme}
+        message={notificationMessage}
+        panelType={settings.notificationPanel}
+      />
+
+      <CustomDateRangePicker
+        visible={showDatePicker}
+        onClose={() => setShowDatePicker(false)}
+        theme={theme}
+        onApply={(from, to) => {
+          setCustomDateRange({ from, to });
+          setSelectedView("custom");
+          setShowDatePicker(false);
+        }}
+      />
+    </SafeAreaView>
   );
 }
