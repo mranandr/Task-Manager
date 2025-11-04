@@ -14,8 +14,8 @@ export interface Theme {
 
 export const lightTheme: Theme = {
   darkMode: false,
-  background: "#fff6e5",  // warm background
-  cardBg: "#ffe0b2",      // light orange card
+  background: "#fff6e5",  
+  cardBg: "#ffe0b2",      
   text: "#1E1E1E",
   subText: "#7A7A7A",
   primary: "#ff9800",
@@ -41,3 +41,28 @@ export const darkTheme: Theme = {
 };
 
 
+// const darkTheme = {
+//   background: '#0f172a',
+//   cardBg: '#1e293b',
+//   text: '#f1f5f9',
+//   subText: '#94a3b8',
+//   primary: '#3b82f6',
+//   border: '#334155',
+//   emptyCell: '#334155',
+//   success: '#10b981',
+//   warning: '#f59e0b',
+//   danger: '#ef4444',
+// };
+
+// const lightTheme = {
+//   background: '#f8fafc',
+//   cardBg: '#ffffff',
+//   text: '#0f172a',
+//   subText: '#64748b',
+//   primary: '#3b82f6',
+//   border: '#e2e8f0',
+//   emptyCell: '#e2e8f0',
+//   success: '#10b981',
+//   warning: '#f59e0b',
+//   danger: '#ef4444',
+// };

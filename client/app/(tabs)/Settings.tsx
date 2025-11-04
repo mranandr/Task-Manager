@@ -1,19 +1,19 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
-  StatusBar,
+  Switch,
+  Modal,
+  ScrollView,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
-import { styles } from "./styles"; 
-import { darkTheme, lightTheme, Theme } from "./TaskTab";
+import { NotificationPanel } from "./Notification";
+import type { Theme } from "./TaskTab";
 
-interface SettingsProps {
-  notificationsEnabled: boolean;
-  notificationTime: string; 
+export interface AppSettings {
   amPm: "AM" | "PM";
+  notificationsEnabled: boolean;
+  notificationTime: string;
   notificationPanel: "Banner" | "Alert" | "Modal";
   darkMode: boolean;
   showSunday: boolean;
@@ -21,223 +21,373 @@ interface SettingsProps {
   notificationTone: "Default" | "Chime" | "Bell";
 }
 
-interface SettingsComponentProps {
-  theme: Theme; 
+export interface SettingsProps {
+  amPm: "AM" | "PM";
+  notificationsEnabled: boolean;
+  notificationTime: string;
+  notificationPanel: "Banner" | "Alert" | "Modal";
+  darkMode: boolean;
+  showSunday: boolean;
+  soundEnabled: boolean;
+  notificationTone: "Default" | "Chime" | "Bell";
+}
+
+export interface ModernSettingsProps {
   settings: SettingsProps;
-  onSettingsChange: (newSettings: SettingsProps) => void;
+  onSettingsChange: (settings: SettingsProps) => void;
+  theme: Theme;
 }
 
-// 👇 Props for Section (reusable layout container)
-interface SectionProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-
-export const Settings: React.FC<SettingsComponentProps> = ({
+export const Settings: React.FC<ModernSettingsProps> = ({
   settings,
   onSettingsChange,
+  theme,
 }) => {
-  const [previewVisible, setPreviewVisible] = React.useState(false);
-  const theme = settings.darkMode ? darkTheme : lightTheme;
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showPanelPicker, setShowPanelPicker] = useState(false);
+  const [showTonePicker, setShowTonePicker] = useState(false);
+  const [tempHour, setTempHour] = useState(settings.notificationTime.split(":")[0]);
+  const [tempMinute, setTempMinute] = useState(settings.notificationTime.split(":")[1]);
+  const [tempAmPm, setTempAmPm] = useState<"AM" | "PM">(settings.amPm);
+  const [tempPanel, setTempPanel] = useState(settings.notificationPanel);
+  const [lastNotifiedAt, setLastNotifiedAt] = useState<string | null>(null);
 
-  const showPreview = () => {
-    setPreviewVisible(true);
-    setTimeout(() => setPreviewVisible(false), 2500);
-  };
+  // ✅ New states for showing notification
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
 
-  const Section: React.FC<SectionProps> = ({ title, children }) => (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.cardBg,
-          borderColor: theme.border,
-          borderWidth: 1,
-          shadowColor: "#000",
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-          elevation: 3,
-        },
-      ]}
-    >
-      <Text
+  /** ------------------------------
+   * 🕒 Notification Timer Logic
+   * ------------------------------ */
+  useEffect(() => {
+    if (!settings.notificationsEnabled) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const parseTime = (timeStr: string) => {
+      if (!timeStr || typeof timeStr !== "string") return null;
+      const parts = timeStr.split(":").map((p) => parseInt(p, 10));
+      if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+      return { rawHours: parts[0], rawMinutes: parts[1] };
+    };
+
+    const checkTime = () => {
+      const parsed = parseTime(settings.notificationTime);
+      if (!parsed) return;
+
+      const { rawHours, rawMinutes } = parsed;
+
+      // Convert 12h to 24h
+      let hours = rawHours;
+      if (settings.amPm === "PM" && rawHours < 12) hours += 12;
+      if (settings.amPm === "AM" && rawHours === 12) hours = 0;
+
+      const now = new Date();
+      const nowHours = now.getHours();
+      const nowMinutes = now.getMinutes();
+
+      // Check if current time matches notification time
+      const nowKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${hours}:${rawMinutes}`;
+
+      if (nowHours === hours && nowMinutes === rawMinutes) {
+        if (lastNotifiedAt !== nowKey) {
+          setNotificationMessage("⏰ Reminder: Stay productive and check your tasks!");
+          setNotificationVisible(true);
+          setLastNotifiedAt(nowKey);
+        }
+      }
+    };
+
+    // Run one immediate check
+    checkTime();
+
+    // Align to next minute
+    const now = new Date();
+    const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+
+    timeoutId = setTimeout(() => {
+      checkTime();
+      intervalId = setInterval(checkTime, 60 * 1000);
+    }, msToNextMinute);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [settings.notificationsEnabled, settings.notificationTime, settings.amPm, lastNotifiedAt]);
+
+  /** ------------------------------
+   * ⚙️ Panel Style Selector Modal
+   * ------------------------------ */
+  const PanelStyleModal = () => (
+    <Modal visible={showPanelPicker} transparent animationType="fade">
+      <View
         style={{
-          fontSize: 18,
-          fontWeight: "700",
-          color: theme.primary,
-          marginBottom: 10,
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
         }}
       >
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
+        <View
+          style={{
+            backgroundColor: theme.cardBg,
+            borderRadius: 20,
+            padding: 24,
+            width: "100%",
+            maxWidth: 400,
+          }}
+        >
+          <Text
+            style={{
+              color: theme.text,
+              fontSize: 18,
+              fontWeight: "700",
+              marginBottom: 20,
+              textAlign: "center",
+            }}
+          >
+            Select Panel Style
+          </Text>
 
-  return (
-    <View style={[styles.settingsPageContainer, { backgroundColor: theme.background }]}>
-      <StatusBar barStyle={settings.darkMode ? "light-content" : "dark-content"} />
-      <Text style={[styles.pageTitle, { color: theme.primary }]}>⚙️ Settings</Text>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* 🔔 Notifications Section */}
-        <Section title="Notifications">
-          <Text style={[styles.label, { color: theme.text }]}>Enable Notifications</Text>
-          <View style={{ borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
-            <Picker
-              selectedValue={settings.notificationsEnabled ? "Enabled" : "Disabled"}
-              style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-              dropdownIconColor={theme.text}
-              onValueChange={(val) =>
-                onSettingsChange({ ...settings, notificationsEnabled: val === "Enabled" })
-              }
+          {["Banner", "Alert", "Modal"].map((opt) => (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => setTempPanel(opt as SettingsProps["notificationPanel"])}
+              style={{
+                backgroundColor: tempPanel === opt ? `${theme.primary}33` : theme.background,
+                borderWidth: 2,
+                borderColor: tempPanel === opt ? theme.primary : theme.border,
+                paddingVertical: 14,
+                borderRadius: 12,
+                marginBottom: 8,
+              }}
             >
-              <Picker.Item label="Enabled" value="Enabled" />
-              <Picker.Item label="Disabled" value="Disabled" />
-            </Picker>
-          </View>
-
-          {settings.notificationsEnabled && (
-            <>
-              <Text style={[styles.label, { color: theme.text }]}>Notification Time</Text>
-              <View style={styles.timePickerRow}>
-                <Picker
-                  selectedValue={settings.notificationTime.split(":")[0]}
-                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-                  dropdownIconColor={theme.text}
-                  onValueChange={(hour) => {
-                    const [, minute] = settings.notificationTime.split(":");
-                    onSettingsChange({ ...settings, notificationTime: `${hour}:${minute}` });
-                  }}
-                >
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const h = String(i + 1).padStart(2, "0");
-                    return <Picker.Item key={h} label={h} value={h} />;
-                  })}
-                </Picker>
-
-                <Picker
-                  selectedValue={settings.notificationTime.split(":")[1]}
-                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-                  dropdownIconColor={theme.text}
-                  onValueChange={(minute) => {
-                    const [hour] = settings.notificationTime.split(":");
-                    onSettingsChange({ ...settings, notificationTime: `${hour}:${minute}` });
-                  }}
-                >
-                  {Array.from({ length: 60 }, (_, i) => {
-                    const m = String(i).padStart(2, "0");
-                    return <Picker.Item key={m} label={m} value={m} />;
-                  })}
-                </Picker>
-
-                <Picker
-                  selectedValue={settings.amPm}
-                  style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-                  dropdownIconColor={theme.text}
-                  onValueChange={(val) => onSettingsChange({ ...settings, amPm: val })}
-                >
-                  <Picker.Item label="AM" value="AM" />
-                  <Picker.Item label="PM" value="PM" />
-                </Picker>
-              </View>
-
-              <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Panel Type</Text>
-              <Picker
-                selectedValue={settings.notificationPanel}
-                style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-                dropdownIconColor={theme.text}
-                onValueChange={(val) => {
-                  onSettingsChange({
-                    ...settings,
-                    notificationPanel: val,
-                  });
-                  showPreview();
+              <Text
+                style={{
+                  color: tempPanel === opt ? theme.primary : theme.text,
+                  textAlign: "center",
+                  fontWeight: "600",
                 }}
               >
-                <Picker.Item label="Banner" value="Banner" />
-                <Picker.Item label="Alert" value="Alert" />
-                <Picker.Item label="Modal" value="Modal" />
-              </Picker>
-            </>
-          )}
-        </Section>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          ))}
 
-        {/* 🎨 Appearance Section */}
-        <Section title="Appearance">
-          <Text style={[styles.label, { color: theme.text }]}>Theme</Text>
-          <Picker
-            selectedValue={settings.darkMode ? "Dark" : "Light"}
-            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-            dropdownIconColor={theme.text}
-            onValueChange={(val) =>
-              onSettingsChange({ ...settings, darkMode: val === "Dark" })
-            }
+          {/* Buttons */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: 16,
+              gap: 12,
+            }}
           >
-            <Picker.Item label="Light" value="Light" />
-            <Picker.Item label="Dark" value="Dark" />
-          </Picker>
+            <TouchableOpacity
+              onPress={() => setShowPanelPicker(false)}
+              style={{
+                flex: 1,
+                backgroundColor: theme.emptyCell,
+                borderRadius: 12,
+                paddingVertical: 14,
+              }}
+            >
+              <Text style={{ color: theme.text, textAlign: "center", fontWeight: "600" }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
 
-          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Show Sunday</Text>
-          <Picker
-            selectedValue={settings.showSunday ? "Yes" : "No"}
-            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-            dropdownIconColor={theme.text}
-            onValueChange={(val) =>
-              onSettingsChange({ ...settings, showSunday: val === "Yes" })
-            }
-          >
-            <Picker.Item label="Yes" value="Yes" />
-            <Picker.Item label="No" value="No" />
-          </Picker>
-        </Section>
+            <TouchableOpacity
+              onPress={() => {
+                onSettingsChange({ ...settings, notificationPanel: tempPanel });
+                setShowPanelPicker(false);
+              }}
+              style={{
+                flex: 1,
+                backgroundColor: theme.primary,
+                borderRadius: 12,
+                paddingVertical: 14,
+              }}
+            >
+              <Text style={{ color: "#fff", textAlign: "center", fontWeight: "600" }}>
+                Set
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
-        {/* 🔊 Sound Section */}
-        <Section title="Sound">
-          <Text style={[styles.label, { color: theme.text }]}>Sound Enabled</Text>
-          <Picker
-            selectedValue={settings.soundEnabled ? "Enabled" : "Disabled"}
-            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-            dropdownIconColor={theme.text}
-            onValueChange={(val) =>
-              onSettingsChange({ ...settings, soundEnabled: val === "Enabled" })
-            }
-          >
-            <Picker.Item label="Enabled" value="Enabled" />
-            <Picker.Item label="Disabled" value="Disabled" />
-          </Picker>
+  /** ------------------------------
+   * 🧱 Setting Row Component
+   * ------------------------------ */
+  const SettingRow = ({
+    icon,
+    label,
+    value,
+    onPress,
+    type = "switch",
+  }: {
+    icon: string;
+    label: string;
+    value: boolean | string;
+    onPress: () => void;
+    type?: "switch" | "text";
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={type === "switch" ? undefined : onPress}
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        backgroundColor: theme.cardBg,
+        marginBottom: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text style={{ fontSize: 20, marginRight: 12 }}>{icon}</Text>
+        <Text style={{ color: theme.text, fontSize: 15, fontWeight: "500" }}>{label}</Text>
+      </View>
 
-          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Notification Tone</Text>
-          <Picker
-            selectedValue={settings.notificationTone}
-            style={[styles.pickerCompact, { backgroundColor: theme.emptyCell, color: theme.text }]}
-            dropdownIconColor={theme.text}
-            onValueChange={(val) =>
-              onSettingsChange({ ...settings, notificationTone: val })
-            }
-          >
-            <Picker.Item label="Default" value="Default" />
-            <Picker.Item label="Chime" value="Chime" />
-            <Picker.Item label="Bell" value="Bell" />
-          </Picker>
-        </Section>
+      {type === "switch" ? (
+        <Switch
+          value={Boolean(value)}
+          onValueChange={onPress}
+          trackColor={{ true: theme.primary, false: theme.emptyCell }}
+        />
+      ) : (
+        <Text style={{ color: theme.primary, fontWeight: "600", fontSize: 14 }}>
+          {value}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
 
-        {/* ✅ Save Button */}
-        <TouchableOpacity
-          style={[
-            styles.addButton,
-            { backgroundColor: theme.primary, marginTop: 16 },
-          ]}
+  /** ------------------------------
+   * 🎛️ UI Render
+   * ------------------------------ */
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingVertical: 16,
+          paddingHorizontal: 16,
+          flexGrow: 1,
+        }}
+      >
+        <Text
+          style={{
+            color: theme.text,
+            fontSize: 28,
+            fontWeight: "800",
+            marginBottom: 8,
+            textAlign: "center",
+          }}
         >
-          <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>
-            Save Settings
-          </Text>
-        </TouchableOpacity>
+          ⚙️ Settings
+        </Text>
+
+        <Text
+          style={{
+            color: theme.subText,
+            fontSize: 14,
+            marginBottom: 24,
+            textAlign: "center",
+          }}
+        >
+          Customize your task tracking experience
+        </Text>
+
+        {/* 🔔 Notifications */}
+        <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
+          🔔 Notifications
+        </Text>
+
+        <SettingRow
+          icon="📬"
+          label="Enable Notifications"
+          value={settings.notificationsEnabled}
+          onPress={() =>
+            onSettingsChange({
+              ...settings,
+              notificationsEnabled: !settings.notificationsEnabled,
+            })
+          }
+        />
+
+        {settings.notificationsEnabled && (
+          <>
+            <SettingRow
+              icon="⏰"
+              label="Notification Time"
+              value={`${settings.notificationTime} ${settings.amPm}`}
+              onPress={() => setShowTimePicker(true)}
+              type="text"
+            />
+
+            <SettingRow
+              icon="📱"
+              label="Panel Style"
+              value={settings.notificationPanel}
+              onPress={() => {
+                setTempPanel(settings.notificationPanel);
+                setShowPanelPicker(true);
+              }}
+              type="text"
+            />
+          </>
+        )}
+
+        {/* 🎨 Appearance */}
+        <Text
+          style={{
+            color: theme.text,
+            fontSize: 16,
+            fontWeight: "700",
+            marginVertical: 12,
+          }}
+        >
+          🎨 Appearance
+        </Text>
+
+        <SettingRow
+          icon="🌙"
+          label="Dark Mode"
+          value={settings.darkMode}
+          onPress={() => onSettingsChange({ ...settings, darkMode: !settings.darkMode })}
+        />
+
+        <SettingRow
+          icon="📅"
+          label="Show Sunday"
+          value={settings.showSunday}
+          onPress={() => onSettingsChange({ ...settings, showSunday: !settings.showSunday })}
+        />
       </ScrollView>
+
+      {/* 🧩 Modals */}
+      <PanelStyleModal />
+
+      {/* ⏰ Notification Panel */}
+      <NotificationPanel
+        visible={notificationVisible}
+        onClose={() => setNotificationVisible(false)}
+        theme={theme}
+        message={notificationMessage}
+        panelType={settings.notificationPanel}
+      />
     </View>
   );
 };
+
+export default Settings;

@@ -13,11 +13,10 @@ import { styles } from "./styles";
 import { SwipeableTask } from "./SwipeableTask";
 import { CalendarView } from "./Calendar";
 import { AnalyticsView } from "./AnalyticsStats";
-import { Settings } from "./Settings";
+import Settings, { AppSettings } from "./Settings";
 import { NotificationPanel } from "./Notification";
 import { CustomDateRangePicker } from "./CustomDatePicker";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { darkTheme, lightTheme } from "./TaskTab";
 
 interface Task {
   id: string;
@@ -28,35 +27,7 @@ interface Task {
   createdAt: string;
 }
 
-interface SettingsProps {
-  amPm: "AM" | "PM";
-  notificationsEnabled: boolean;
-  notificationTime: string;
-  notificationPanel: "Banner" | "Alert" | "Modal";
-  darkMode: boolean;
-  showSunday: boolean;
-  soundEnabled: boolean;
-  notificationTone: "Default" | "Chime" | "Bell";
-}
-
-
-
-export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<
-    "dashboard" | "tasks" | "settings"
-  >("dashboard");
-
-  const [settings, setSettings] = useState<SettingsProps>({
-  amPm: "AM",
-  notificationsEnabled: true,
-  notificationTime: "09:00",
-  notificationPanel: "Banner", 
-  darkMode: false,
-  showSunday: true,
-  soundEnabled: true,
-  notificationTone: "Default",
-});
-
+// Generate realistic initial data
 const generateInitialTasks = (): Record<string, Task[]> => {
   const initial: Record<string, Task[]> = {};
   const today = new Date();
@@ -94,6 +65,22 @@ const generateInitialTasks = (): Record<string, Task[]> => {
   return initial;
 };
 
+export default function Dashboard() {
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "tasks" | "settings"
+  >("dashboard");
+
+  const [settings, setSettings] = useState<AppSettings>({
+    amPm: "AM", 
+    notificationsEnabled: true,
+    notificationTime: "09:00",
+    notificationPanel: "Banner",
+    darkMode: false,
+    showSunday: true,
+    soundEnabled: true,
+    notificationTone: "Default",
+  });
+
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskName, setNewTaskName] = useState("");
@@ -110,22 +97,45 @@ const generateInitialTasks = (): Record<string, Task[]> => {
   const [customDateRange, setCustomDateRange] = useState({ from: "", to: "" });
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [previewVisible, setPreviewVisible] = React.useState(false);
+  
+  // FIX: Move lastNotifiedKey to top level of component
+  const [lastNotifiedKey, setLastNotifiedKey] = useState<string | null>(null);
 
-
-React.useEffect(() => {
-  Animated.timing(fadeAnim, {
-    toValue: 1,
-    duration: 400,
-    useNativeDriver: true,
-  }).start();
-}, []);
-
+  React.useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const [tasks, setTasks] = useState<Record<string, Task[]>>(
     generateInitialTasks
   );
 
-const theme = settings.darkMode ? darkTheme : lightTheme;
+  const monthTasks = useMemo(() => {
+    const prefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+    return Object.fromEntries(
+      Object.entries(tasks).filter(([key]) => key.startsWith(prefix))
+    );
+  }, [tasks, selectedYear, selectedMonth]);
+
+  const theme = useMemo(
+    () => ({
+      darkMode: settings.darkMode, 
+      background: settings.darkMode ? "#0a0a0a" : "#f8f9fa",
+      cardBg: settings.darkMode ? "#1a1a1a" : "#ffffff",
+      text: settings.darkMode ? "#ffffff" : "#0a0a0a",
+      subText: settings.darkMode ? "#a0a0a0" : "#6b7280",
+      primary: "#6366f1",
+      success: "#10b981",
+      danger: "#ef4444",
+      warning: "#f59e0b",
+      emptyCell: settings.darkMode ? "#2a2a2a" : "#e5e7eb",
+      border: settings.darkMode ? "#333333" : "#e5e7eb",
+    }),
+    [settings.darkMode]
+  );
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -271,40 +281,61 @@ const theme = settings.darkMode ? darkTheme : lightTheme;
     return md;
   }, [selectedYear, selectedMonth, tasks, settings.showSunday]);
 
-useEffect(() => {
-  if (!settings.notificationsEnabled) return;
+  useEffect(() => {
+    if (!settings.notificationsEnabled) return;
 
-  const checkTime = () => {
-    const now = new Date();
-    const [rawHours, rawMinutes] = settings.notificationTime.split(":").map(Number);
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    // Convert to 24-hour format based on AM/PM
-    let hours = rawHours;
-    if (settings.amPm === "PM" && rawHours < 12) hours += 12;
-    if (settings.amPm === "AM" && rawHours === 12) hours = 0;
+    const parseTime = (timeStr: string) => {
+      if (!timeStr || typeof timeStr !== "string") return null;
+      const [h, m] = timeStr.split(":").map(Number);
+      if (isNaN(h) || isNaN(m)) return null;
+      return { rawHours: h, rawMinutes: m };
+    };
 
-    if (now.getHours() === hours && now.getMinutes() === rawMinutes) {
-      const todayKey = now.toISOString().split("T")[0];
-      const todayTasks = tasks[todayKey] || [];
-      const remaining = todayTasks.filter((t) => !t.completed).length;
+    const checkTime = () => {
+      const parsed = parseTime(settings.notificationTime);
+      if (!parsed) return;
 
-      if (remaining > 0) {
-        setNotificationMessage(
-          `⏰ You have ${remaining} task${remaining > 1 ? "s" : ""} remaining today!`
-        );
-        setNotificationVisible(true);
+      let { rawHours, rawMinutes } = parsed;
+      if (settings.amPm === "PM" && rawHours < 12) rawHours += 12;
+      if (settings.amPm === "AM" && rawHours === 12) rawHours = 0;
+
+      const now = new Date();
+      const nowHours = now.getHours();
+      const nowMinutes = now.getMinutes();
+
+      const key = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${rawHours}:${rawMinutes}`;
+      if (nowHours === rawHours && nowMinutes === rawMinutes && lastNotifiedKey !== key) {
+        const todayKey = now.toISOString().split("T")[0];
+        const todayTasks = tasks[todayKey] || [];
+        const remaining = todayTasks.filter((t) => !t.completed).length;
+
+        if (remaining > 0) {
+          setNotificationMessage(
+            `⏰ You have ${remaining} task${remaining > 1 ? "s" : ""} remaining today!`
+          );
+          setNotificationVisible(true);
+          setLastNotifiedKey(key);
+        }
       }
-    }
-  };
+    };
 
-  checkTime();
-  const interval = setInterval(checkTime, 60000);
+    const now = new Date();
+    checkTime(); 
+    const delay = (60 - now.getSeconds()) * 1000;
+    timeoutId = setTimeout(() => {
+      checkTime();
+      intervalId = setInterval(checkTime, 60000);
+    }, delay);
 
-  return () => clearInterval(interval);
-}, [settings.notificationsEnabled, settings.notificationTime, settings.amPm, tasks]);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [settings.notificationsEnabled, settings.notificationTime, settings.amPm, tasks, lastNotifiedKey]);
 
-
-  // Task operations
   const toggleTaskCompletion = useCallback((dateKey: string, taskId: string) => {
     setTasks((prev) => {
       const copy = { ...prev };
@@ -372,15 +403,14 @@ useEffect(() => {
     });
   }, []);
 
-const animateFade = useCallback(() => {
-  fadeAnim.setValue(0);
-  Animated.timing(fadeAnim, {
-    toValue: 1,
-    duration: 400,
-    useNativeDriver: true,
-  }).start();
-}, [fadeAnim]);
-
+  const animateFade = useCallback(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   useEffect(() => {
     animateFade();
@@ -509,7 +539,6 @@ const animateFade = useCallback(() => {
           </Animated.View>
         );
 
-        
       case "settings":
         return (
           <Animated.View
@@ -527,15 +556,14 @@ const animateFade = useCallback(() => {
                 paddingBottom: 140,
               }}
             >
-<Settings
-  theme={theme}
-  settings={settings}
-  onSettingsChange={setSettings}
-/>
+              <Settings
+                theme={theme}
+                settings={settings}
+                onSettingsChange={setSettings}
+              />
             </ScrollView>
           </Animated.View>
         );
-
     }
   };
 

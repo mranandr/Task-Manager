@@ -1,3 +1,4 @@
+import React from "react";
 import { View } from "react-native";
 import { Text } from "react-native-gesture-handler";
 import { styles } from "./styles";
@@ -33,21 +34,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       : selectedView === "monthly"
       ? stats.monthCompleted
       : stats.customCompleted ?? 0;
-
   const percent =
     selectedView === "weekly"
       ? stats.weekPercent
       : selectedView === "monthly"
       ? stats.monthPercent
       : stats.customPercent ?? 0;
-
   const total =
     selectedView === "weekly"
       ? stats.weekTotal
       : selectedView === "monthly"
       ? stats.monthTotal
       : stats.customTotal ?? 0;
-
   const labelPrefix =
     selectedView === "custom" ? "Custom Range" : selectedView === "weekly" ? "Weekly" : "Monthly";
 
@@ -66,7 +64,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </View>
         ))}
       </View>
-
       <View style={[styles.card, { backgroundColor: theme.cardBg }]}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>Overall Progress</Text>
         <View style={[styles.progressBar, { backgroundColor: theme.emptyCell }]}>
