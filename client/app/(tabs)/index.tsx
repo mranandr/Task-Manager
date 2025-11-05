@@ -169,7 +169,6 @@ export default function Dashboard() {
       const total = dateTasks.length;
       const allCompleted = total > 0 && completed === total;
 
-      // Streak calculation
       if (allCompleted) {
         tempStreak++;
         longestStreak = Math.max(longestStreak, tempStreak);
@@ -183,7 +182,6 @@ export default function Dashboard() {
         tempStreak = 0;
       }
 
-      // Week and month stats
       if (date >= weekAgo && date <= today) {
         weekCompleted += completed;
         weekTotal += total;
@@ -192,8 +190,6 @@ export default function Dashboard() {
         monthCompleted += completed;
         monthTotal += total;
       }
-
-      // Completion time analysis
       dateTasks.forEach((task) => {
         if (task.completed && task.completedAt && task.createdAt) {
           const created = new Date(task.createdAt);

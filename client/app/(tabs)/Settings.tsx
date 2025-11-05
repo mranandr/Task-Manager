@@ -45,52 +45,44 @@ export const Settings: React.FC<ModernSettingsProps> = ({
 }) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showPanelPicker, setShowPanelPicker] = useState(false);
-  const [showTonePicker, setShowTonePicker] = useState(false);
-  const [tempHour, setTempHour] = useState(settings.notificationTime.split(":")[0]);
-  const [tempMinute, setTempMinute] = useState(settings.notificationTime.split(":")[1]);
-  const [tempAmPm, setTempAmPm] = useState<"AM" | "PM">(settings.amPm);
+  const [tempHour, setTempHour] = useState("09");
+  const [tempMinute, setTempMinute] = useState("00");
+  const [tempAmPm, setTempAmPm] = useState<"AM" | "PM">("AM");
   const [tempPanel, setTempPanel] = useState(settings.notificationPanel);
   const [lastNotifiedAt, setLastNotifiedAt] = useState<string | null>(null);
-
-  // ✅ New states for showing notification
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
 
-  /** ------------------------------
-   * 🕒 Notification Timer Logic
-   * ------------------------------ */
+  // Initialize temp values when settings change
+  useEffect(() => {
+    const [h, m] = settings.notificationTime.split(":");
+    setTempHour(h || "09");
+    setTempMinute(m || "00");
+    setTempAmPm(settings.amPm);
+  }, [settings.notificationTime, settings.amPm]);
+
+  // Notification Timer Logic
   useEffect(() => {
     if (!settings.notificationsEnabled) return;
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    const parseTime = (timeStr: string) => {
-      if (!timeStr || typeof timeStr !== "string") return null;
-      const parts = timeStr.split(":").map((p) => parseInt(p, 10));
-      if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
-      return { rawHours: parts[0], rawMinutes: parts[1] };
-    };
-
     const checkTime = () => {
-      const parsed = parseTime(settings.notificationTime);
-      if (!parsed) return;
+      const [rawHours, rawMinutes] = settings.notificationTime
+        .split(":")
+        .map((p) => parseInt(p, 10));
 
-      const { rawHours, rawMinutes } = parsed;
+      if (isNaN(rawHours) || isNaN(rawMinutes)) return;
 
-      // Convert 12h to 24h
       let hours = rawHours;
       if (settings.amPm === "PM" && rawHours < 12) hours += 12;
       if (settings.amPm === "AM" && rawHours === 12) hours = 0;
 
       const now = new Date();
-      const nowHours = now.getHours();
-      const nowMinutes = now.getMinutes();
-
-      // Check if current time matches notification time
       const nowKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${hours}:${rawMinutes}`;
 
-      if (nowHours === hours && nowMinutes === rawMinutes) {
+      if (now.getHours() === hours && now.getMinutes() === rawMinutes) {
         if (lastNotifiedAt !== nowKey) {
           setNotificationMessage("⏰ Reminder: Stay productive and check your tasks!");
           setNotificationVisible(true);
@@ -99,10 +91,7 @@ export const Settings: React.FC<ModernSettingsProps> = ({
       }
     };
 
-    // Run one immediate check
     checkTime();
-
-    // Align to next minute
     const now = new Date();
     const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
 
@@ -117,114 +106,6 @@ export const Settings: React.FC<ModernSettingsProps> = ({
     };
   }, [settings.notificationsEnabled, settings.notificationTime, settings.amPm, lastNotifiedAt]);
 
-  /** ------------------------------
-   * ⚙️ Panel Style Selector Modal
-   * ------------------------------ */
-  const PanelStyleModal = () => (
-    <Modal visible={showPanelPicker} transparent animationType="fade">
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 20,
-        }}
-      >
-        <View
-          style={{
-            backgroundColor: theme.cardBg,
-            borderRadius: 20,
-            padding: 24,
-            width: "100%",
-            maxWidth: 400,
-          }}
-        >
-          <Text
-            style={{
-              color: theme.text,
-              fontSize: 18,
-              fontWeight: "700",
-              marginBottom: 20,
-              textAlign: "center",
-            }}
-          >
-            Select Panel Style
-          </Text>
-
-          {["Banner", "Alert", "Modal"].map((opt) => (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => setTempPanel(opt as SettingsProps["notificationPanel"])}
-              style={{
-                backgroundColor: tempPanel === opt ? `${theme.primary}33` : theme.background,
-                borderWidth: 2,
-                borderColor: tempPanel === opt ? theme.primary : theme.border,
-                paddingVertical: 14,
-                borderRadius: 12,
-                marginBottom: 8,
-              }}
-            >
-              <Text
-                style={{
-                  color: tempPanel === opt ? theme.primary : theme.text,
-                  textAlign: "center",
-                  fontWeight: "600",
-                }}
-              >
-                {opt}
-              </Text>
-            </TouchableOpacity>
-          ))}
-
-          {/* Buttons */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 16,
-              gap: 12,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => setShowPanelPicker(false)}
-              style={{
-                flex: 1,
-                backgroundColor: theme.emptyCell,
-                borderRadius: 12,
-                paddingVertical: 14,
-              }}
-            >
-              <Text style={{ color: theme.text, textAlign: "center", fontWeight: "600" }}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                onSettingsChange({ ...settings, notificationPanel: tempPanel });
-                setShowPanelPicker(false);
-              }}
-              style={{
-                flex: 1,
-                backgroundColor: theme.primary,
-                borderRadius: 12,
-                paddingVertical: 14,
-              }}
-            >
-              <Text style={{ color: "#fff", textAlign: "center", fontWeight: "600" }}>
-                Set
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  /** ------------------------------
-   * 🧱 Setting Row Component
-   * ------------------------------ */
   const SettingRow = ({
     icon,
     label,
@@ -273,9 +154,6 @@ export const Settings: React.FC<ModernSettingsProps> = ({
     </TouchableOpacity>
   );
 
-  /** ------------------------------
-   * 🎛️ UI Render
-   * ------------------------------ */
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
@@ -308,7 +186,7 @@ export const Settings: React.FC<ModernSettingsProps> = ({
           Customize your task tracking experience
         </Text>
 
-        {/* 🔔 Notifications */}
+        {/* Notifications Section */}
         <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700", marginBottom: 12 }}>
           🔔 Notifications
         </Text>
@@ -339,16 +217,13 @@ export const Settings: React.FC<ModernSettingsProps> = ({
               icon="📱"
               label="Panel Style"
               value={settings.notificationPanel}
-              onPress={() => {
-                setTempPanel(settings.notificationPanel);
-                setShowPanelPicker(true);
-              }}
+              onPress={() => setShowPanelPicker(true)}
               type="text"
             />
           </>
         )}
 
-        {/* 🎨 Appearance */}
+        {/* Appearance Section */}
         <Text
           style={{
             color: theme.text,
@@ -375,10 +250,263 @@ export const Settings: React.FC<ModernSettingsProps> = ({
         />
       </ScrollView>
 
-      {/* 🧩 Modals */}
-      <PanelStyleModal />
+      {/* Time Picker Modal */}
+      <Modal visible={showTimePicker} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.cardBg,
+              borderRadius: 20,
+              padding: 24,
+              width: "100%",
+              maxWidth: 400,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.text,
+                fontSize: 18,
+                fontWeight: "700",
+                marginBottom: 20,
+                textAlign: "center",
+              }}
+            >
+              Set Notification Time
+            </Text>
 
-      {/* ⏰ Notification Panel */}
+            <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 20 }}>
+              {/* Hour Picker */}
+              <ScrollView style={{ maxHeight: 150, width: 60 }}>
+                {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    onPress={() => setTempHour(h)}
+                    style={{
+                      padding: 10,
+                      backgroundColor: tempHour === h ? `${theme.primary}33` : "transparent",
+                      borderRadius: 8,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: tempHour === h ? theme.primary : theme.text,
+                        textAlign: "center",
+                        fontWeight: tempHour === h ? "700" : "400",
+                      }}
+                    >
+                      {h}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <Text style={{ color: theme.text, fontSize: 24, alignSelf: "center" }}>:</Text>
+
+              {/* Minute Picker */}
+              <ScrollView style={{ maxHeight: 150, width: 60 }}>
+                {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setTempMinute(m)}
+                    style={{
+                      padding: 10,
+                      backgroundColor: tempMinute === m ? `${theme.primary}33` : "transparent",
+                      borderRadius: 8,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: tempMinute === m ? theme.primary : theme.text,
+                        textAlign: "center",
+                        fontWeight: tempMinute === m ? "700" : "400",
+                      }}
+                    >
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* AM/PM Picker */}
+              <View style={{ justifyContent: "center" }}>
+                {["AM", "PM"].map((period) => (
+                  <TouchableOpacity
+                    key={period}
+                    onPress={() => setTempAmPm(period as "AM" | "PM")}
+                    style={{
+                      padding: 10,
+                      backgroundColor: tempAmPm === period ? `${theme.primary}33` : "transparent",
+                      borderRadius: 8,
+                      marginBottom: 4,
+                      width: 60,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: tempAmPm === period ? theme.primary : theme.text,
+                        textAlign: "center",
+                        fontWeight: tempAmPm === period ? "700" : "400",
+                      }}
+                    >
+                      {period}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Buttons */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setShowTimePicker(false)}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.emptyCell,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ color: theme.text, textAlign: "center", fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  onSettingsChange({
+                    ...settings,
+                    notificationTime: `${tempHour}:${tempMinute}`,
+                    amPm: tempAmPm,
+                  });
+                  setShowTimePicker(false);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.primary,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ color: "#fff", textAlign: "center", fontWeight: "600" }}>
+                  Set Time
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Panel Style Modal */}
+      <Modal visible={showPanelPicker} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: theme.cardBg,
+              borderRadius: 20,
+              padding: 24,
+              width: "100%",
+              maxWidth: 400,
+            }}
+          >
+            <Text
+              style={{
+                color: theme.text,
+                fontSize: 18,
+                fontWeight: "700",
+                marginBottom: 20,
+                textAlign: "center",
+              }}
+            >
+              Select Panel Style
+            </Text>
+
+            {["Banner", "Alert", "Modal"].map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => setTempPanel(opt as SettingsProps["notificationPanel"])}
+                style={{
+                  backgroundColor: tempPanel === opt ? `${theme.primary}33` : theme.background,
+                  borderWidth: 2,
+                  borderColor: tempPanel === opt ? theme.primary : theme.border,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  marginBottom: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    color: tempPanel === opt ? theme.primary : theme.text,
+                    textAlign: "center",
+                    fontWeight: "600",
+                  }}
+                >
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                marginTop: 16,
+                gap: 12,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setShowPanelPicker(false)}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.emptyCell,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ color: theme.text, textAlign: "center", fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  onSettingsChange({ ...settings, notificationPanel: tempPanel });
+                  setShowPanelPicker(false);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.primary,
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                }}
+              >
+                <Text style={{ color: "#fff", textAlign: "center", fontWeight: "600" }}>
+                  Set
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Notification Panel */}
       <NotificationPanel
         visible={notificationVisible}
         onClose={() => setNotificationVisible(false)}
