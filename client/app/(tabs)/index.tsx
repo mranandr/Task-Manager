@@ -27,7 +27,6 @@ interface Task {
   createdAt: string;
 }
 
-// Generate realistic initial data
 const generateInitialTasks = (): Record<string, Task[]> => {
   const initial: Record<string, Task[]> = {};
   const today = new Date();
